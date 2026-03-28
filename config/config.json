@@ -17,7 +17,7 @@
     "username": "postgres",
     "password": "communeedge@1234",
     "database": "communeedge",
-    "host": "3.236.250.43",
+    "host": "postgres",
     "dialect": "postgres"
   }
 }
