@@ -15,9 +15,9 @@
   },
   "production": {
     "username": "postgres",
-    "password": "welink@1234",
-    "database": "welink_pr",
-    "host": "postgres",
+    "password": "communeedge@1234",
+    "database": "communeedge",
+    "host": "3.236.250.43",
     "dialect": "postgres"
   }
 }
