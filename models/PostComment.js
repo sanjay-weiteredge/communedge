@@ -47,6 +47,11 @@ module.exports = (sequelize, DataTypes) => {
         modelName: 'PostComment',
         tableName: 'post_comments',
         underscored: true,
+        indexes: [
+            { fields: ['post_id'] },
+            { fields: ['user_id'] },
+            { fields: ['parent_id'] }
+        ],
         hooks: {
             afterCreate: async (comment) => {
                 const { PostVote } = sequelize.models;

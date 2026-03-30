@@ -64,6 +64,10 @@ module.exports = (sequelize, DataTypes) => {
         modelName: 'StartupPost',
         tableName: 'startup_posts',
         underscored: true,
+        indexes: [
+            { fields: ['startup_id'] },
+            { fields: ['status'] }
+        ]
     });
 
     return StartupPost;

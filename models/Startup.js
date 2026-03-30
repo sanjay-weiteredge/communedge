@@ -105,6 +105,12 @@ module.exports = (sequelize, DataTypes) => {
         modelName: 'Startup',
         tableName: 'startups',
         underscored: true,
+        indexes: [
+            { fields: ['owner_user_id'] },
+            { fields: ['industry_id'] },
+            { fields: ['status'] },
+            { fields: ['is_featured'] }
+        ]
     });
 
     return Startup;

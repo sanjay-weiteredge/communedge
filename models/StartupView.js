@@ -32,6 +32,9 @@ module.exports = (sequelize, DataTypes) => {
         modelName: 'StartupView',
         tableName: 'startup_views',
         underscored: true,
+        indexes: [
+            { fields: ['startup_id'] }
+        ],
         hooks: {
             afterCreate: async (view) => {
                 const { StartupMetric } = sequelize.models;

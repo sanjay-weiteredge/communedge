@@ -127,6 +127,9 @@ module.exports = (sequelize, DataTypes) => {
                 unique: true,
                 fields: ['user_id', 'post_id'],
             },
+            {
+                fields: ['post_id'],
+            },
         ],
         hooks: {
             afterCreate: async (vote) => {
