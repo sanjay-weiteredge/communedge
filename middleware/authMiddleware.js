@@ -1,5 +1,6 @@
 const admin = require('../config/firebase');
-const { User } = require('../models');
+const { User, Sequelize } = require('../models');
+const Op = Sequelize.Op;
 
 const verifyToken = async (req, res, next) => {
     const authHeader = req.headers.authorization;
@@ -14,7 +15,14 @@ const verifyToken = async (req, res, next) => {
         const decodedToken = await admin.auth().verifyIdToken(token);
 
         req.user = decodedToken;
-        const dbUser = await User.findOne({ where: { firebase_uid: decodedToken.uid } });
+        const dbUser = await User.findOne({
+            where: {
+                [Op.or]: [
+                    { firebase_uid: decodedToken.uid },
+                    { email: decodedToken.email }
+                ]
+            }
+        });
 
         if (dbUser) {
             const { isS3Value, uploadProfileImageToS3 } = require('../services/s3Service');
@@ -64,7 +72,14 @@ const verifyToken = async (req, res, next) => {
             } catch (createError) {
                 if (createError.name === 'SequelizeUniqueConstraintError') {
                     console.log('Race condition detected: User created by another request. Fetching...');
-                    const existingUser = await User.findOne({ where: { firebase_uid: decodedToken.uid } });
+                    const existingUser = await User.findOne({
+                        where: {
+                            [Op.or]: [
+                                { firebase_uid: decodedToken.uid },
+                                { email: decodedToken.email }
+                            ]
+                        }
+                    });
                     if (existingUser) {
                         req.dbUser = existingUser;
                         next();
