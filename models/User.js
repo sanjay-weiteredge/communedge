@@ -25,6 +25,14 @@ module.exports = (sequelize, DataTypes) => {
             unique: true,
             allowNull: false,
         },
+        name: {
+            type: DataTypes.STRING,
+            allowNull: true,
+        },
+        phone: {
+            type: DataTypes.STRING,
+            allowNull: true,
+        },
         role: {
             type: DataTypes.STRING,
             allowNull: false,
@@ -39,7 +47,23 @@ module.exports = (sequelize, DataTypes) => {
         },
         auth_provider: {
             type: DataTypes.STRING,
-        }
+        },
+        bio: {
+            type: DataTypes.TEXT,
+            allowNull: true,
+        },
+        linkedin_url: {
+            type: DataTypes.STRING,
+            allowNull: true,
+        },
+        location: {
+            type: DataTypes.STRING,
+            allowNull: true,
+        },
+        password_hash: {
+            type: DataTypes.TEXT,
+            allowNull: true,
+        },
     }, {
         sequelize,
         modelName: 'User',

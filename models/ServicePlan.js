@@ -1,14 +1,14 @@
 const { Model } = require('sequelize');
 
 module.exports = (sequelize, DataTypes) => {
-    class Service extends Model {
+    class ServicePlan extends Model {
         static associate(models) {
-            // A Service acts as a Category/Group
-            Service.hasMany(models.ServicePlan, { foreignKey: 'service_id', as: 'plans' });
+            ServicePlan.belongsTo(models.Service, { foreignKey: 'service_id', as: 'parentService' });
+            ServicePlan.hasMany(models.FormSubmission, { foreignKey: 'plan_id', as: 'submissions' });
         }
     }
 
-    Service.init({
+    ServicePlan.init({
         id: {
             type: DataTypes.UUID,
             defaultValue: DataTypes.UUIDV4,
@@ -17,10 +17,16 @@ module.exports = (sequelize, DataTypes) => {
         name: {
             type: DataTypes.STRING,
             allowNull: false,
-            unique: true,
         },
         description: {
             type: DataTypes.TEXT,
+        },
+        price: {
+            type: DataTypes.STRING,
+        },
+        service_id: {
+            type: DataTypes.UUID,
+            allowNull: false,
         },
         is_active: {
             type: DataTypes.BOOLEAN,
@@ -28,10 +34,10 @@ module.exports = (sequelize, DataTypes) => {
         },
     }, {
         sequelize,
-        modelName: 'Service',
-        tableName: 'services',
+        modelName: 'ServicePlan',
+        tableName: 'service_plans',
         underscored: true,
     });
 
-    return Service;
+    return ServicePlan;
 };

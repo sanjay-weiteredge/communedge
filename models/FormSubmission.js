@@ -3,7 +3,11 @@ const { Model } = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
     class FormSubmission extends Model {
         static associate(models) {
-            FormSubmission.belongsTo(models.Service, { foreignKey: 'service_id', as: 'service' });
+            FormSubmission.belongsTo(models.ServicePlan, {
+                foreignKey: 'plan_id',
+                as: 'plan',
+                onDelete: 'SET NULL'
+            });
         }
     }
 
@@ -33,9 +37,12 @@ module.exports = (sequelize, DataTypes) => {
         general_details: {
             type: DataTypes.TEXT,
         },
-        service_id: {
+        plan_id: {
             type: DataTypes.UUID,
-            allowNull: false,
+            allowNull: true,
+        },
+        mentor_name: {
+            type: DataTypes.STRING,
         },
         status: {
             type: DataTypes.STRING,

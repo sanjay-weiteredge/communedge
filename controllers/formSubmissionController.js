@@ -1,17 +1,23 @@
-const { FormSubmission, Service } = require('../models');
+const { FormSubmission, ServicePlan, Service } = require('../models');
 
 exports.submitForm = async (req, res) => {
     try {
-        const { name, email, phone, company_name, general_details, service_id } = req.body;
+        const { name, email, phone, company_name, general_details, plan_id, mentor_name } = req.body;
 
-        if (!name || !email || !service_id) {
-            return res.status(400).json({ error: 'Name, email, and service are required' });
+        if (!name || !email) {
+            return res.status(400).json({ error: 'Name and email are required' });
         }
 
-        // Validate service exists
-        const service = await Service.findByPk(service_id);
-        if (!service) {
-            return res.status(404).json({ error: 'Selected service not found' });
+        if (!plan_id && !mentor_name) {
+            return res.status(400).json({ error: 'Selected service plan or mentor is required' });
+        }
+
+        // Validate plan_id if provided
+        if (plan_id) {
+            const plan = await ServicePlan.findByPk(plan_id);
+            if (!plan) {
+                return res.status(404).json({ error: 'Selected pricing plan not found' });
+            }
         }
 
         const submission = await FormSubmission.create({
@@ -20,7 +26,8 @@ exports.submitForm = async (req, res) => {
             phone,
             company_name,
             general_details,
-            service_id
+            plan_id: plan_id || null,
+            mentor_name
         });
 
         res.status(201).json({ message: 'Form submitted successfully', submission });
@@ -33,8 +40,12 @@ exports.submitForm = async (req, res) => {
 exports.getAllSubmissions = async (req, res) => {
     try {
         const submissions = await FormSubmission.findAll({
-            include: [{ model: Service, as: 'service' }],
-            order: [['createdAt', 'DESC']]
+            include: [{
+                model: ServicePlan,
+                as: 'plan',
+                include: [{ model: Service, as: 'parentService', attributes: ['name'] }]
+            }],
+            order: [['created_at', 'DESC']]
         });
         res.json(submissions);
     } catch (error) {

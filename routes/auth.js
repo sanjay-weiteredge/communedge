@@ -18,10 +18,13 @@ const upload = multer({
     }
 });
 
-router.post('/login', verifyToken, authController.login);
-router.get('/profile/:firebase_uid', verifyToken, authController.getProfile);
+// --- Public Routes ---
+router.post('/signup', authController.signup);
+router.post('/login', authController.login);
 
-router.put('/profile/:firebase_uid', verifyToken, upload.single('photo'), authController.updateProfile);
-router.delete('/profile/:firebase_uid/photo', verifyToken, authController.deleteProfilePhoto);
+// --- Protected Routes ---
+router.get('/profile/:id', verifyToken, authController.getProfile);
+router.put('/profile/:id', verifyToken, upload.single('photo'), authController.updateProfile);
+router.delete('/profile/:id/photo', verifyToken, authController.deleteProfilePhoto);
 
 module.exports = router;

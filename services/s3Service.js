@@ -47,6 +47,7 @@ const isS3Value = (value) => {
         clean.startsWith('categories/') ||
         clean.startsWith('startup-posts/') ||
         clean.startsWith('startup-post-thumbnails/') ||
+        clean.startsWith('mentor-avatars/') ||
         clean.includes('amazonaws.com')
     );
 };

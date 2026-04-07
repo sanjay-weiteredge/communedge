@@ -29,6 +29,12 @@ module.exports = (sequelize, DataTypes) => {
             allowNull: true,
             comment: 'S3 URL for the category cover/banner image',
         },
+        iconUrl: {
+            type: DataTypes.TEXT,
+            field: 'icon_url',
+            allowNull: true,
+            comment: 'S3 URL for the category icon image',
+        },
         description: {
             type: DataTypes.TEXT,
             allowNull: true,

@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/adminController');
+const mentorController = require('../controllers/mentorController');
 const adminAuth = require('../middleware/adminAuth');
 
 router.post('/login', adminController.adminLogin);
@@ -24,4 +25,10 @@ router.delete('/comments/:id', adminAuth, adminController.adminDeleteComment);
 router.patch('/comments/:id/hide', adminAuth, adminController.adminHideComment);
 router.patch('/comments/:id/restore', adminAuth, adminController.adminRestoreComment);
 
+// ── Mentor management ──────────────────────────────────────────────────────
+// GET all mentors (including inactive) for the admin dashboard
+router.get('/mentors', adminAuth, mentorController.adminGetAllMentors);
+// Create, Update, Delete are handled directly via /api/mentors (adminAuth protected)
+
 module.exports = router;
+
