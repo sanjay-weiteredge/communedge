@@ -3,16 +3,25 @@ const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
 
-
 const { sequelize } = require('./models');
 
 const app = express();
 const PORT = process.env.PORT || 8000;
 
+// ✅ FUTURE-PROOF CORS (supports all subdomains + .in/.com)
+const allowedPattern = /^https?:\/\/([a-zA-Z0-9-]+\.)?communedge\.(in|com)$/;
+
 app.use(cors({
-  origin: ['http://localhost:8080', 'http://localhost:3000', 'https://app.communedge.in'],
+  origin: function (origin, callback) {
+    if (!origin || allowedPattern.test(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS: ' + origin));
+    }
+  },
   credentials: true
 }));
+
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
