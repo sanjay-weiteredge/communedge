@@ -4,7 +4,7 @@ const { getSignedUrlForView, isS3Value } = require('../services/s3Service');
 const authorInclude = {
     model: User,
     as: 'author',
-    attributes: ['id', 'email', 'photo_url', 'role'],
+    attributes: ['id', 'email', 'name', 'photo_url', 'role'],
     include: [{
         model: Startup,
         as: 'startup',
@@ -15,6 +15,28 @@ const authorInclude = {
         }]
     }]
 };
+
+/* ─────────────────────────────────────────────
+   Helper: Format author name
+   Logic: Founder Name -> User Name -> Email Prefix
+───────────────────────────────────────────── */
+function getAuthorDisplayName(author) {
+    if (!author) return 'Anonymous';
+
+    // 1. Try Founder Name (if they have a startup with founders)
+    if (author.startup && author.startup.founders && author.startup.founders.length > 0) {
+        const founderName = author.startup.founders[0].name;
+        if (founderName) return founderName;
+    }
+
+    // 2. Try User table name
+    if (author.name) return author.name;
+
+    // 3. Fallback to Email prefix
+    if (author.email) return author.email.split('@')[0];
+
+    return 'User';
+}
 
 /* ─────────────────────────────────────────────
    Helper: vote counts + caller's vote for a comment
@@ -59,8 +81,11 @@ exports.getCommentsByPost = async (req, res) => {
 
         const plain = await Promise.all(comments.map(async (c) => {
             const json = c.toJSON();
-            if (json.author && isS3Value(json.author.photo_url)) {
-                json.author.photo_url = await getSignedUrlForView(json.author.photo_url);
+            if (json.author) {
+                json.author.display_name = getAuthorDisplayName(json.author);
+                if (isS3Value(json.author.photo_url)) {
+                    json.author.photo_url = await getSignedUrlForView(json.author.photo_url);
+                }
             }
             return json;
         }));
@@ -115,8 +140,11 @@ exports.addComment = async (req, res) => {
         });
 
         const json = full.toJSON();
-        if (json.author && isS3Value(json.author.photo_url)) {
-            json.author.photo_url = await getSignedUrlForView(json.author.photo_url);
+        if (json.author) {
+            json.author.display_name = getAuthorDisplayName(json.author);
+            if (isS3Value(json.author.photo_url)) {
+                json.author.photo_url = await getSignedUrlForView(json.author.photo_url);
+            }
         }
 
         res.status(201).json({ ...json, upvotes: 0, downvotes: 0, userVote: null });
@@ -300,8 +328,11 @@ exports.getAllCommentsByPost = async (req, res) => {
 
         const plain = await Promise.all(comments.map(async (c) => {
             const json = c.toJSON();
-            if (json.author && isS3Value(json.author.photo_url)) {
-                json.author.photo_url = await getSignedUrlForView(json.author.photo_url);
+            if (json.author) {
+                json.author.display_name = getAuthorDisplayName(json.author);
+                if (isS3Value(json.author.photo_url)) {
+                    json.author.photo_url = await getSignedUrlForView(json.author.photo_url);
+                }
             }
             return json;
         }));
