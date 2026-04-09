@@ -13,7 +13,7 @@ const allowedPattern = /^https?:\/\/([a-zA-Z0-9-]+\.)?communedge\.(in|com)$/;
 
 app.use(cors({
   origin: function (origin, callback) {
-    if (!origin || allowedPattern.test(origin)) {
+    if (!origin || allowedPattern.test(origin) || origin.includes('localhost') || origin.includes('127.0.0.1')) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS: ' + origin));

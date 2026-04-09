@@ -292,12 +292,18 @@ exports.deletePost = async (req, res) => {
             return res.status(404).json({ error: 'Post not found' });
         }
 
+        // Manually delete dependent records to avoid foreign key constraint errors
+        await PostVote.destroy({ where: { post_id: id } });
+        await PostComment.destroy({ where: { post_id: id } });
+        await PostMetric.destroy({ where: { post_id: id } });
+        await PostView.destroy({ where: { post_id: id } });
+
         await post.destroy();
 
         res.json({ message: 'Post deleted successfully' });
     } catch (error) {
         console.error('Delete Post Error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: 'Internal server error', details: error.message });
     }
 };
 exports.getTrendingPosts = async (req, res) => {
