@@ -41,7 +41,6 @@ const resolveMentorList = (mentors) =>
 exports.getAllMentors = async (req, res) => {
     try {
         const mentors = await Mentor.findAll({
-            where: { is_active: true },
             order: [
                 ['display_order', 'ASC'],
                 ['created_at', 'ASC'],
@@ -62,7 +61,7 @@ exports.getAllMentors = async (req, res) => {
 exports.getMentorById = async (req, res) => {
     try {
         const mentor = await Mentor.findOne({
-            where: { id: req.params.id, is_active: true },
+            where: { id: req.params.id },
         });
         if (!mentor) {
             return res.status(404).json({ error: 'Mentor not found' });
@@ -229,7 +228,7 @@ exports.deleteMentor = async (req, res) => {
         if (!mentor) {
             return res.status(404).json({ error: 'Mentor not found' });
         }
-        await mentor.update({ is_active: false });
+        await mentor.destroy();
         res.json({ message: 'Mentor deleted successfully' });
     } catch (error) {
         console.error('Delete Mentor Error:', error);
@@ -248,7 +247,7 @@ exports.adminGetAllMentors = async (req, res) => {
         const mentors = await Mentor.findAll({
             order: [
                 ['display_order', 'ASC'],
-                ['created_at', 'ASC'],
+                ['createdAt', 'ASC'],
             ],
         });
         const resolved = await resolveMentorList(mentors);

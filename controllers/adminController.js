@@ -1,7 +1,33 @@
-const { Admin, Startup, User, StartupPost, PostVote, PostComment, CommentVote, Founder, StartupMetric, StartupView, sequelize } = require('../models');
+const { Admin, Startup, User, StartupPost, PostVote, PostComment, PostMetric, CommentVote, Founder, StartupMetric, StartupView, Category, sequelize } = require('../models');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { sendStartupApprovedEmail, sendStartupRejectedEmail, sendPostApprovedEmail, sendPostRejectedEmail } = require('../services/emailService');
+const { getSignedUrlForView, isS3Value } = require('../services/s3Service');
+
+// Helper to sign URLs for S3 assets
+const signUrls = async (obj, type = 'startup') => {
+    const s = obj.toJSON ? obj.toJSON() : obj;
+
+    if (type === 'startup') {
+        if (s.logo_url && isS3Value(s.logo_url)) s.logo_url = await getSignedUrlForView(s.logo_url);
+        if (s.banner_url && isS3Value(s.banner_url)) s.banner_url = await getSignedUrlForView(s.banner_url);
+        if (Array.isArray(s.founders)) {
+            for (const f of s.founders) {
+                if (f.photo_url && isS3Value(f.photo_url)) f.photo_url = await getSignedUrlForView(f.photo_url);
+            }
+        }
+    } else if (type === 'post') {
+        if (s.media_url && isS3Value(s.media_url)) s.media_url = await getSignedUrlForView(s.media_url);
+        if (s.startup) {
+            if (s.startup.logo_url && isS3Value(s.startup.logo_url)) {
+                s.startup.logo_url = await getSignedUrlForView(s.startup.logo_url);
+            }
+        }
+    } else if (type === 'founder') {
+        if (s.photo_url && isS3Value(s.photo_url)) s.photo_url = await getSignedUrlForView(s.photo_url);
+    }
+    return s;
+};
 
 exports.adminLogin = async (req, res) => {
     const { email, password } = req.body;
@@ -115,7 +141,9 @@ exports.getAllPendingStartups = async (req, res) => {
             ],
             order: [['updatedAt', 'DESC']],
         });
-        res.json(startups);
+
+        const signed = await Promise.all(startups.map(s => signUrls(s, 'startup')));
+        res.json(signed);
     } catch (error) {
         console.error('Get Pending Startups Error:', error);
         res.status(500).json({ error: 'Server error' });
@@ -124,9 +152,68 @@ exports.getAllPendingStartups = async (req, res) => {
 
 exports.getAllUsers = async (req, res) => {
     try {
-        const users = await User.findAll();
-        res.json(users);
+        const { Op } = require('sequelize');
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const search = req.query.search || '';
+        const offset = (page - 1) * limit;
+
+        const where = search ? {
+            [Op.or]: [
+                { name: { [Op.iLike]: `%${search}%` } },
+                { email: { [Op.iLike]: `%${search}%` } }
+            ]
+        } : {};
+
+        const { count, rows } = await User.findAndCountAll({
+            where,
+            limit: limit,
+            offset: offset,
+            order: [['created_at', 'DESC']]
+        });
+
+        res.json({
+            users: rows,
+            totalItems: count,
+            totalPages: Math.ceil(count / limit),
+            currentPage: page
+        });
     } catch (error) {
+        console.error('Get All Users Error:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+};
+
+exports.getAllFounders = async (req, res) => {
+    try {
+        const { Op } = require('sequelize');
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const search = req.query.search || '';
+        const offset = (page - 1) * limit;
+
+        const where = search ? {
+            name: { [Op.iLike]: `%${search}%` }
+        } : {};
+
+        const { count, rows } = await Founder.findAndCountAll({
+            where,
+            include: [{ model: Startup, as: 'startup', attributes: ['name'] }],
+            limit: limit,
+            offset: offset,
+            order: [['created_at', 'DESC']]
+        });
+
+        const signed = await Promise.all(rows.map(f => signUrls(f, 'founder')));
+
+        res.json({
+            founders: signed,
+            totalItems: count,
+            totalPages: Math.ceil(count / limit),
+            currentPage: page
+        });
+    } catch (error) {
+        console.error('Get All Founders Error:', error);
         res.status(500).json({ error: 'Server error' });
     }
 };
@@ -138,7 +225,9 @@ exports.getAllPendingPosts = async (req, res) => {
             where: { status: 'PENDING' },
             include: [{ model: Startup, as: 'startup', attributes: ['name', 'logo_url'] }]
         });
-        res.json(posts);
+
+        const signed = await Promise.all(posts.map(p => signUrls(p, 'post')));
+        res.json(signed);
     } catch (error) {
         console.error('Get Pending Posts Error:', error);
         res.status(500).json({ error: 'Internal server error' });
@@ -303,7 +392,6 @@ exports.getAllComments = async (req, res) => {
     }
 };
 
-// DELETE /api/admin/comments/:id — hard delete any comment
 exports.adminDeleteComment = async (req, res) => {
     try {
         const { id } = req.params;
@@ -346,6 +434,174 @@ exports.adminRestoreComment = async (req, res) => {
         res.json({ message: 'Comment restored to active by admin' });
     } catch (error) {
         console.error('AdminRestoreComment Error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+exports.togglePinTrending = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const post = await StartupPost.findByPk(id);
+        if (!post) return res.status(404).json({ error: 'Post not found' });
+
+        await post.update({ is_pinned_trending: !post.is_pinned_trending });
+        res.json({
+            message: post.is_pinned_trending ? 'Post pinned to trending' : 'Post unpinned from trending',
+            is_pinned_trending: post.is_pinned_trending
+        });
+    } catch (error) {
+        console.error('TogglePinTrending Error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+exports.getAllApprovedPosts = async (req, res) => {
+    try {
+        const posts = await StartupPost.findAll({
+            where: { status: 'APPROVED' },
+            include: [
+                { model: Startup, as: 'startup', attributes: ['name', 'logo_url'] },
+                { model: PostMetric, as: 'metrics' }
+            ],
+            order: [
+                ['is_pinned_trending', 'DESC'],
+                [{ model: PostMetric, as: 'metrics' }, 'trending_score', 'DESC']
+            ]
+        });
+
+        const signed = await Promise.all(posts.map(p => signUrls(p, 'post')));
+        res.json(signed);
+    } catch (error) {
+        console.error('Get Approved Posts Error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+exports.toggleFeatureStartup = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const startup = await Startup.findByPk(id);
+        if (!startup) return res.status(404).json({ error: 'Startup not found' });
+
+        await startup.update({ is_featured: !startup.is_featured });
+        res.json({
+            message: startup.is_featured ? 'Startup featured successfully' : 'Startup removed from featured',
+            is_featured: startup.is_featured
+        });
+    } catch (error) {
+        console.error('ToggleFeatureStartup Error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+exports.getAllApprovedStartups = async (req, res) => {
+    try {
+        const startups = await Startup.findAll({
+            where: { status: 'APPROVED' },
+            include: [
+                { model: Category, as: 'industry', attributes: ['name'] },
+                { model: StartupMetric, as: 'metrics' }
+            ],
+            order: [['is_featured', 'DESC'], ['created_at', 'DESC']]
+        });
+
+        const signed = await Promise.all(startups.map(s => signUrls(s, 'startup')));
+        res.json(signed);
+    } catch (error) {
+        console.error('Get Approved Startups Error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+exports.getAllPosts = async (req, res) => {
+    try {
+        const posts = await StartupPost.findAll({
+            include: [
+                { model: Startup, as: 'startup', attributes: ['id', 'name', 'logo_url'] },
+                {
+                    model: PostComment,
+                    as: 'comments',
+                    include: [{ model: User, as: 'author', attributes: ['id', 'email', 'name'] }]
+                },
+                { model: PostMetric, as: 'metrics' }
+            ],
+            order: [['created_at', 'DESC']]
+        });
+
+        const signed = await Promise.all(posts.map(p => signUrls(p, 'post')));
+        res.json(signed);
+    } catch (error) {
+        console.error('GetAllPosts Error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+exports.togglePostComments = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const post = await StartupPost.findByPk(id);
+        if (!post) return res.status(404).json({ error: 'Post not found' });
+
+        await post.update({ comments_enabled: !post.comments_enabled });
+        res.json({
+            message: post.comments_enabled ? 'Comments enabled' : 'Comments disabled',
+            comments_enabled: post.comments_enabled
+        });
+    } catch (error) {
+        console.error('TogglePostComments Error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+exports.getDashboardStats = async (req, res) => {
+    try {
+        const totalUsers = await User.count();
+        const totalStartups = await Startup.count({ where: { status: 'APPROVED' } });
+        const totalMentors = await User.count({ where: { role: 'MENTOR' } });
+        const totalVCFirms = await User.count({ where: { role: 'VC' } });
+
+        const pendingStartupsCount = await Startup.count({ where: { status: 'PENDING' } });
+        const pendingPostsCount = await StartupPost.count({ where: { status: 'PENDING' } });
+
+        const activeIndustries = await Category.count();
+
+        // Get latest pending items
+        const rawPendingStartups = await Startup.findAll({
+            where: { status: 'PENDING' },
+            limit: 5,
+            order: [['updated_at', 'DESC']],
+            include: [{ model: Category, as: 'industry', attributes: ['name'] }]
+        });
+
+        const rawPendingPosts = await StartupPost.findAll({
+            where: { status: 'PENDING' },
+            limit: 5,
+            order: [['updated_at', 'DESC']],
+            include: [{ model: Startup, as: 'startup', attributes: ['name'] }]
+        });
+
+        res.json({
+            totalUsers,
+            totalStartups,
+            totalMentors,
+            totalVCFirms,
+            pendingApprovals: pendingStartupsCount + pendingPostsCount,
+            activeIndustries,
+            recentPendingStartups: rawPendingStartups.map(s => ({
+                id: s.id,
+                name: s.name,
+                category: s.industry?.name || 'Uncategorized',
+                status: s.status
+            })),
+            recentPendingPosts: rawPendingPosts.map(p => ({
+                id: p.id,
+                name: p.title || 'Untitled Post',
+                category: p.startup?.name || 'Unknown Startup',
+                status: p.status
+            }))
+        });
+    } catch (error) {
+        console.error('Get Dashboard Stats Error:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };

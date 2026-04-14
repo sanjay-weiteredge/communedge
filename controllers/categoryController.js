@@ -5,7 +5,6 @@ const { v4: uuidv4 } = require('uuid');
 exports.getAllCategories = async (req, res) => {
     try {
         const categories = await Category.findAll({
-            where: { is_active: true },
             attributes: {
                 include: [
                     [
@@ -31,12 +30,23 @@ exports.getAllCategories = async (req, res) => {
             if (cat.imageUrl && isS3) {
                 try {
                     const signedUrl = await getSignedUrlForView(cat.imageUrl);
-                    console.log(`Generated signedUrl: ${signedUrl ? 'SUCCESS' : 'FAILED'}`);
                     if (signedUrl) {
                         cat.imageUrl = signedUrl;
                     }
                 } catch (err) {
-                    console.error(`Failed to sign URL for ${cat.name}:`, err.message);
+                    console.error(`Failed to sign imageUrl for ${cat.name}:`, err.message);
+                }
+            }
+
+            const isIconS3 = isS3Value(cat.iconUrl);
+            if (cat.iconUrl && isIconS3) {
+                try {
+                    const signedUrl = await getSignedUrlForView(cat.iconUrl);
+                    if (signedUrl) {
+                        cat.iconUrl = signedUrl;
+                    }
+                } catch (err) {
+                    console.error(`Failed to sign iconUrl for ${cat.name}:`, err.message);
                 }
             }
             return cat;
@@ -52,6 +62,7 @@ exports.getAllCategories = async (req, res) => {
 exports.createCategory = async (req, res) => {
     try {
         const { name, description, type } = req.body;
+        let { iconUrl } = req.body;
         let imageUrl = req.body.imageUrl || req.body.image_url;
 
         if (!name) {
@@ -60,17 +71,25 @@ exports.createCategory = async (req, res) => {
 
         if (req.file) {
             const fileName = `cat_${uuidv4()}`;
-            imageUrl = await uploadImageToS3(
+            const s3Url = await uploadImageToS3(
                 req.file.buffer,
                 'categories',
                 fileName,
                 req.file.mimetype
             );
+
+            // For INDUSTRY types, the uploaded file is considered the icon
+            if (type === 'INDUSTRY' || !type) {
+                iconUrl = s3Url;
+            } else {
+                imageUrl = s3Url;
+            }
         }
 
         const category = await Category.create({
             name,
             imageUrl,
+            iconUrl,
             description,
             type: type || 'INDUSTRY'
         });
@@ -84,7 +103,8 @@ exports.createCategory = async (req, res) => {
 exports.updateCategory = async (req, res) => {
     try {
         const { id } = req.params;
-        const { name, description, type } = req.body;
+        const { name, description, type, is_active } = req.body;
+        let { iconUrl } = req.body;
 
         const category = await Category.findByPk(id);
         if (!category) {
@@ -95,19 +115,27 @@ exports.updateCategory = async (req, res) => {
 
         if (req.file) {
             const fileName = `cat_${uuidv4()}`;
-            imageUrl = await uploadImageToS3(
+            const s3Url = await uploadImageToS3(
                 req.file.buffer,
                 'categories',
                 fileName,
                 req.file.mimetype
             );
+
+            if (type === 'INDUSTRY' || (!type && category.type === 'INDUSTRY')) {
+                iconUrl = s3Url;
+            } else {
+                imageUrl = s3Url;
+            }
         }
 
         await category.update({
             name: name || category.name,
             description: description !== undefined ? description : category.description,
             imageUrl,
-            type: type || category.type
+            iconUrl: iconUrl !== undefined ? iconUrl : category.iconUrl,
+            type: type || category.type,
+            is_active: is_active !== undefined ? is_active : category.is_active
         });
 
         res.json({ message: 'Category updated successfully', category });
@@ -124,6 +152,19 @@ exports.deleteCategory = async (req, res) => {
         const category = await Category.findByPk(id);
         if (!category) {
             return res.status(404).json({ error: 'Category not found' });
+        }
+
+        // 1. Set industry_id to NULL for all startups using this category as primary
+        await Startup.update(
+            { industry_id: null },
+            { where: { industry_id: id } }
+        );
+
+        // 2. Remove entries from the many-to-many join table (StartupIndustry)
+        // Note: Assuming StartupIndustry model exists and is imported
+        const { StartupIndustry } = require('../models');
+        if (StartupIndustry) {
+            await StartupIndustry.destroy({ where: { category_id: id } });
         }
 
         await category.destroy();

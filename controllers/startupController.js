@@ -184,8 +184,12 @@ exports.getAllStartups = async (req, res) => {
         const offset = (page - 1) * limit;
         const category = req.query.category || "All";
         const search = req.query.search || "";
+        const isFeatured = req.query.featured === 'true';
 
         const whereClause = { status: 'APPROVED' };
+        if (isFeatured) {
+            whereClause.is_featured = true;
+        }
 
         // Search filter: Check name, tagline, description, OR any of the industry names
         if (search) {

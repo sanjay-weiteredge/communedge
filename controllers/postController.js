@@ -315,7 +315,10 @@ exports.getTrendingPosts = async (req, res) => {
                 { model: Startup, as: 'startup', attributes: ['name', 'logo_url', 'tagline'] },
                 { model: PostMetric, as: 'metrics' }
             ],
-            order: [[{ model: PostMetric, as: 'metrics' }, 'trending_score', 'DESC']],
+            order: [
+                ['is_pinned_trending', 'DESC'],
+                [{ model: PostMetric, as: 'metrics' }, 'trending_score', 'DESC']
+            ],
             limit
         });
 
