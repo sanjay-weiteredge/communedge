@@ -1,4 +1,4 @@
-const { Admin, Startup, User, StartupPost, PostVote, PostComment, PostMetric, CommentVote, Founder, StartupMetric, StartupView, Category, sequelize } = require('../models');
+const { Admin, Startup, User, StartupPost, PostVote, PostComment, PostMetric, CommentVote, Founder, StartupMetric, StartupView, StartupIndustry, PostView, Category, sequelize } = require('../models');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { sendStartupApprovedEmail, sendStartupRejectedEmail, sendPostApprovedEmail, sendPostRejectedEmail } = require('../services/emailService');
@@ -315,6 +315,8 @@ exports.deletePost = async (req, res) => {
             await CommentVote.destroy({ where: { comment_id: commentIds } });
             await PostComment.destroy({ where: { post_id: id } });
         }
+        await PostMetric.destroy({ where: { post_id: id } });
+        await PostView.destroy({ where: { post_id: id } });
 
         await post.destroy();
 
@@ -352,6 +354,8 @@ exports.deleteStartup = async (req, res) => {
                 await CommentVote.destroy({ where: { comment_id: commentIds }, transaction: t });
             }
             await PostComment.destroy({ where: { post_id: postIds }, transaction: t });
+            await PostMetric.destroy({ where: { post_id: postIds }, transaction: t });
+            await PostView.destroy({ where: { post_id: postIds }, transaction: t });
         }
 
         // 3. Delete all StartupPosts
@@ -365,6 +369,9 @@ exports.deleteStartup = async (req, res) => {
 
         // 6. Delete StartupViews
         await StartupView.destroy({ where: { startup_id: id }, transaction: t });
+
+        // 6.5 Delete StartupIndustry mapping
+        await StartupIndustry.destroy({ where: { startup_id: id }, transaction: t });
 
         // 7. Downgrade owner back to USER role
         const owner = await User.findByPk(startup.owner_user_id, { transaction: t });
