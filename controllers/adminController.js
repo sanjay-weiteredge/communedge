@@ -167,6 +167,25 @@ exports.getAllPendingStartups = async (req, res) => {
     }
 };
 
+exports.getAllRejectedStartups = async (req, res) => {
+    try {
+        const startups = await Startup.findAll({
+            where: { status: 'REJECTED' },
+            include: [
+                { model: User, as: 'owner', attributes: ['id', 'email', 'role'] },
+                { model: Founder, as: 'founders' },
+            ],
+            order: [['updatedAt', 'DESC']],
+        });
+
+        const signed = await Promise.all(startups.map(s => signUrls(s, 'startup')));
+        res.json(signed);
+    } catch (error) {
+        console.error('Get Rejected Startups Error:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+};
+
 exports.getAllUsers = async (req, res) => {
     try {
         const { Op } = require('sequelize');

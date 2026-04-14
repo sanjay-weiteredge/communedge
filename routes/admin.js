@@ -8,6 +8,7 @@ router.post('/login', adminController.adminLogin);
 router.post('/signup', adminController.createAdmin);
 
 router.get('/pending-startups', adminAuth, adminController.getAllPendingStartups);
+router.get('/rejected-startups', adminAuth, adminController.getAllRejectedStartups);
 router.get('/approved-startups', adminAuth, adminController.getAllApprovedStartups);
 router.post('/approve/:id', adminAuth, adminController.approveStartup);
 router.post('/reject/:id', adminAuth, adminController.rejectStartup);
