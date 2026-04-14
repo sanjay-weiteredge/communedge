@@ -17,7 +17,23 @@ const signUrls = async (obj, type = 'startup') => {
             }
         }
     } else if (type === 'post') {
-        if (s.media_url && isS3Value(s.media_url)) s.media_url = await getSignedUrlForView(s.media_url);
+        if (s.media_url) {
+            try {
+                if (s.media_url.startsWith('[') && s.media_url.endsWith(']')) {
+                    const keys = JSON.parse(s.media_url);
+                    s.media_urls = await Promise.all(keys.map(key => getSignedUrlForView(key)));
+                    if (s.media_urls.length > 0) s.media_url = s.media_urls[0];
+                } else if (isS3Value(s.media_url)) {
+                    const signed = await getSignedUrlForView(s.media_url);
+                    s.media_url = signed;
+                    s.media_urls = [signed];
+                } else {
+                    s.media_urls = [s.media_url];
+                }
+            } catch (e) {
+                s.media_urls = [s.media_url];
+            }
+        }
         if (s.startup) {
             if (s.startup.logo_url && isS3Value(s.startup.logo_url)) {
                 s.startup.logo_url = await getSignedUrlForView(s.startup.logo_url);
@@ -28,6 +44,7 @@ const signUrls = async (obj, type = 'startup') => {
     }
     return s;
 };
+
 
 exports.adminLogin = async (req, res) => {
     const { email, password } = req.body;
@@ -515,26 +532,55 @@ exports.getAllApprovedStartups = async (req, res) => {
 
 exports.getAllPosts = async (req, res) => {
     try {
-        const posts = await StartupPost.findAll({
+        const { Op } = require('sequelize');
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 12;
+        const search = req.query.search || '';
+        const offset = (page - 1) * limit;
+
+        const where = search ? {
+            [Op.or]: [
+                { title: { [Op.iLike]: `%${search}%` } },
+                { '$startup.name$': { [Op.iLike]: `%${search}%` } }
+            ]
+        } : {};
+
+        const { count, rows } = await StartupPost.findAndCountAll({
+            where,
             include: [
                 { model: Startup, as: 'startup', attributes: ['id', 'name', 'logo_url'] },
                 {
                     model: PostComment,
                     as: 'comments',
-                    include: [{ model: User, as: 'author', attributes: ['id', 'email', 'name'] }]
+                    include: [{
+                        model: User,
+                        as: 'author',
+                        attributes: ['id', 'email', 'name', 'role'],
+                        include: [{ model: Startup, as: 'startup', attributes: ['name'] }]
+                    }]
                 },
                 { model: PostMetric, as: 'metrics' }
             ],
-            order: [['created_at', 'DESC']]
+            limit: limit,
+            offset: offset,
+            order: [['created_at', 'DESC']],
+            distinct: true // Required when including arrays to get correct count
         });
 
-        const signed = await Promise.all(posts.map(p => signUrls(p, 'post')));
-        res.json(signed);
+        const signed = await Promise.all(rows.map(p => signUrls(p, 'post')));
+
+        res.json({
+            posts: signed,
+            totalItems: count,
+            totalPages: Math.ceil(count / limit),
+            currentPage: page
+        });
     } catch (error) {
         console.error('GetAllPosts Error:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };
+
 
 exports.togglePostComments = async (req, res) => {
     try {

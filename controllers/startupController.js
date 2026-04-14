@@ -187,9 +187,6 @@ exports.getAllStartups = async (req, res) => {
         const isFeatured = req.query.featured === 'true';
 
         const whereClause = { status: 'APPROVED' };
-        if (isFeatured) {
-            whereClause.is_featured = true;
-        }
 
         // Search filter: Check name, tagline, description, OR any of the industry names
         if (search) {
@@ -205,7 +202,7 @@ exports.getAllStartups = async (req, res) => {
         // Industry filter: check both primary and many-to-many industries
         if (category !== "All") {
             whereClause[Op.or] = [
-                ...(whereClause[Op.or] || []), // Merge with existing search filters if any
+                ...(whereClause[Op.or] || []),
                 { '$industry.name$': category },
                 { '$industries.name$': category }
             ];
@@ -213,16 +210,8 @@ exports.getAllStartups = async (req, res) => {
 
         const include = [
             { model: StartupMetric, as: 'metrics' },
-            {
-                model: Category,
-                as: 'industry',
-                required: false
-            },
-            {
-                model: Category,
-                as: 'industries',
-                required: false
-            },
+            { model: Category, as: 'industry', required: false },
+            { model: Category, as: 'industries', required: false },
             {
                 model: StartupPost,
                 as: 'posts',
@@ -241,42 +230,64 @@ exports.getAllStartups = async (req, res) => {
                         [
                             Startup.sequelize.literal(`(
                                 SELECT COUNT(*)
-                                FROM post_votes AS pv
-                                WHERE pv.post_id = posts.id AND pv.vote_type = -1
-                            )`),
-                            'total_downvotes'
-                        ],
-                        [
-                            Startup.sequelize.literal(`(
-                                SELECT COUNT(*)
-                                FROM post_comments AS pc
+                                FROM post_votes AS pc
                                 WHERE pc.post_id = posts.id
                             )`),
                             'comments_count'
-                        ],
-                        [
-                            Startup.sequelize.literal(`(
-                                SELECT vote_type
-                                FROM post_votes AS pv
-                                WHERE pv.post_id = posts.id AND pv.user_id = '${req.dbUser?.id || '00000000-0000-0000-0000-000000000000'}'
-                                LIMIT 1
-                            )`),
-                            'userVote'
                         ]
                     ]
                 }
             }
         ];
 
-        const { count, rows: startups } = await Startup.findAndCountAll({
-            where: whereClause,
-            include,
-            order: [['created_at', 'DESC']],
-            limit,
-            offset,
-            distinct: true,
-            subQuery: false // Required when joining M:M association with limit/offset and top-level filter
-        });
+        let startups = [];
+        let count = 0;
+
+        if (isFeatured) {
+            // 🚀 Priority 1: Get all manually featured startups
+            const featuredList = await Startup.findAll({
+                where: { status: 'APPROVED', is_featured: true },
+                include,
+                order: [['created_at', 'DESC']],
+                limit: limit,
+                distinct: true,
+                subQuery: false
+            });
+
+            // 🚀 Priority 2: Fill remaining slots with latest approved
+            let backfill = [];
+            if (featuredList.length < limit) {
+                const featuredIds = featuredList.map(s => s.id);
+                backfill = await Startup.findAll({
+                    where: {
+                        status: 'APPROVED',
+                        is_featured: false,
+                        id: { [Op.notIn]: featuredIds }
+                    },
+                    include,
+                    order: [['created_at', 'DESC']],
+                    limit: limit - featuredList.length,
+                    distinct: true,
+                    subQuery: false
+                });
+            }
+
+            startups = [...featuredList, ...backfill];
+            count = startups.length;
+        } else {
+            // Standard paginated view
+            const result = await Startup.findAndCountAll({
+                where: whereClause,
+                include,
+                order: [['created_at', 'DESC']],
+                limit,
+                offset,
+                distinct: true,
+                subQuery: false
+            });
+            startups = result.rows;
+            count = result.count;
+        }
 
         const signed = await Promise.all(startups.map(s => signStartupUrls(s.toJSON())));
 
