@@ -18,18 +18,17 @@ const authorInclude = {
 
 /* ─────────────────────────────────────────────
    Helper: Format author name
-   Logic: Founder Name -> User Name -> Email Prefix
+   Logic: Startup Name (if STARTUP) -> User Name -> Email Prefix
 ───────────────────────────────────────────── */
 function getAuthorDisplayName(author) {
     if (!author) return 'Anonymous';
 
-    // 1. Try Founder Name (if they have a startup with founders)
-    if (author.startup && author.startup.founders && author.startup.founders.length > 0) {
-        const founderName = author.startup.founders[0].name;
-        if (founderName) return founderName;
+    // 1. If role is STARTUP and they have a registered startup, use the startup's name
+    if (author.role === 'STARTUP' && author.startup && author.startup.name) {
+        return author.startup.name;
     }
 
-    // 2. Try User table name
+    // 2. Try User table name (for USER role or fallback)
     if (author.name) return author.name;
 
     // 3. Fallback to Email prefix
