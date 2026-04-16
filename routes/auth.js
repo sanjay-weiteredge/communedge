@@ -25,6 +25,7 @@ router.post('/login', authController.login);
 // --- Protected Routes ---
 router.get('/profile/:id', verifyToken, authController.getProfile);
 router.put('/profile/:id', verifyToken, upload.single('photo'), authController.updateProfile);
+router.delete('/profile/:id', verifyToken, authController.deleteAccount);
 router.delete('/profile/:id/photo', verifyToken, authController.deleteProfilePhoto);
 
 module.exports = router;

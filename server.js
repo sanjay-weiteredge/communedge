@@ -38,6 +38,7 @@ app.use('/api/submissions', require('./routes/submissions'));
 app.use('/api/comments', require('./routes/comments'));
 app.use('/api/mentors', require('./routes/mentors'));
 app.use('/api/partners', require('./routes/partners'));
+app.use('/api/blogs', require('./routes/blogs'));
 
 async function startServer() {
   try {

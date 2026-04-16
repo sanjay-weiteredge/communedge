@@ -24,6 +24,8 @@ router.delete('/post/:id', adminAuth, adminController.deletePost);
 router.delete('/startup/:id', adminAuth, adminController.deleteStartup);
 
 router.get('/users', adminAuth, adminController.getAllUsers);
+router.patch('/users/:id', adminAuth, adminController.adminUpdateUser);
+router.delete('/users/:id', adminAuth, adminController.adminDeleteUser);
 router.get('/founders', adminAuth, adminController.getAllFounders);
 
 router.get('/comments', adminAuth, adminController.getAllComments);

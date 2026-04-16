@@ -16,7 +16,7 @@ const generateToken = (user) => {
 
 exports.signup = async (req, res) => {
     try {
-        const { name, email, password, phone } = req.body;
+        const { name, email, password, phone, linkedin_url } = req.body;
 
         if (!name || !email || !password) {
             return res.status(400).json({ error: 'Name, email, and password are required.' });
@@ -45,6 +45,7 @@ exports.signup = async (req, res) => {
             existingUser.password_hash = password_hash;
             existingUser.name = name.trim();
             existingUser.phone = phone?.trim() || existingUser.phone;
+            existingUser.linkedin_url = linkedin_url?.trim() || existingUser.linkedin_url;
             await existingUser.save();
             user = existingUser;
         } else {
@@ -53,6 +54,7 @@ exports.signup = async (req, res) => {
                 email: normalizedEmail,
                 name: name.trim(),
                 phone: phone?.trim() || null,
+                linkedin_url: linkedin_url?.trim() || null,
                 password_hash,
                 role: 'USER',
                 is_active: true,
@@ -181,15 +183,15 @@ exports.getProfile = async (req, res) => {
         res.json(userJson);
 
     } catch (error) {
-        console.error('Get Profile Error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        console.error('❌ Get Profile Error:', error);
+        res.status(500).json({ error: 'Internal server error', details: error.message });
     }
 };
 
 exports.updateProfile = async (req, res) => {
     try {
         const { id } = req.user;
-        const { is_active, name, phone } = req.body;
+        const { is_active, name, phone, bio, linkedin_url, location } = req.body;
         const file = req.file;
 
         const user = await User.findByPk(id);
@@ -204,8 +206,11 @@ exports.updateProfile = async (req, res) => {
             }
         }
 
-        if (name) user.name = name;
-        if (phone) user.phone = phone;
+        if (name !== undefined) user.name = name;
+        if (phone !== undefined) user.phone = phone;
+        if (bio !== undefined) user.bio = bio;
+        if (linkedin_url !== undefined) user.linkedin_url = linkedin_url;
+        if (location !== undefined) user.location = location;
         if (typeof is_active !== 'undefined') user.is_active = is_active;
 
         await user.save();
@@ -219,8 +224,23 @@ exports.updateProfile = async (req, res) => {
 
         res.json({ message: 'Profile updated', user: userJson });
     } catch (error) {
-        console.error('Update Profile Error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        console.error('❌ Update Profile Error:', error);
+        res.status(500).json({ error: 'Internal server error', details: error.message });
+    }
+};
+
+exports.deleteAccount = async (req, res) => {
+    try {
+        const { id } = req.user;
+        const user = await User.findByPk(id);
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        await user.destroy();
+
+        res.json({ message: 'Account deleted successfully' });
+    } catch (error) {
+        console.error('❌ Delete Account Error:', error);
+        res.status(500).json({ error: 'Internal server error', details: error.message });
     }
 };
 

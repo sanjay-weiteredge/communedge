@@ -208,15 +208,24 @@ exports.getAllUsers = async (req, res) => {
             order: [['created_at', 'DESC']]
         });
 
+        // Sign photo URLs for each user
+        const users = await Promise.all(rows.map(async (u) => {
+            const userJson = u.toJSON();
+            if (userJson.photo_url && isS3Value(userJson.photo_url)) {
+                userJson.photo_url = await getSignedUrlForView(userJson.photo_url);
+            }
+            return userJson;
+        }));
+
         res.json({
-            users: rows,
+            users,
             totalItems: count,
             totalPages: Math.ceil(count / limit),
             currentPage: page
         });
     } catch (error) {
-        console.error('Get All Users Error:', error);
-        res.status(500).json({ error: 'Server error' });
+        console.error('❌ Get All Users Error:', error);
+        res.status(500).json({ error: 'Failed to fetch users', details: error.message });
     }
 };
 
@@ -678,4 +687,52 @@ exports.getDashboardStats = async (req, res) => {
     }
 };
 
+exports.adminUpdateUser = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, phone, role, is_active, bio, linkedin_url, location } = req.body;
 
+        const user = await User.findByPk(id);
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        if (name !== undefined) user.name = name;
+        if (phone !== undefined) user.phone = phone;
+        if (role !== undefined) user.role = role;
+        if (is_active !== undefined) user.is_active = is_active;
+        if (bio !== undefined) user.bio = bio;
+        if (linkedin_url !== undefined) user.linkedin_url = linkedin_url;
+        if (location !== undefined) user.location = location;
+        await user.save();
+
+        const userJson = user.toJSON();
+        delete userJson.password_hash;
+        if (userJson.photo_url && isS3Value(userJson.photo_url)) {
+            userJson.photo_url = await getSignedUrlForView(userJson.photo_url);
+        }
+
+        res.json({ message: 'User updated successfully', user: userJson });
+    } catch (error) {
+        console.error('❌ Admin Update User Error:', error);
+        res.status(500).json({ error: 'Internal server error', details: error.message });
+    }
+};
+
+exports.adminDeleteUser = async (req, res) => {
+    const t = await sequelize.transaction();
+    try {
+        const { id } = req.params;
+        const user = await User.findByPk(id);
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        // If user has a startup, we might want to delete it or detach it.
+        // For safety, let's just delete the user.
+        await user.destroy({ transaction: t });
+        await t.commit();
+
+        res.json({ message: 'User deleted successfully' });
+    } catch (error) {
+        if (t) await t.rollback();
+        console.error('❌ Admin Delete User Error:', error);
+        res.status(500).json({ error: 'Internal server error', details: error.message });
+    }
+};
