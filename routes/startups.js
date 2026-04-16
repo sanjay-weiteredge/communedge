@@ -17,9 +17,16 @@ const startupUpload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: 50 * 1024 * 1024 },
     fileFilter: (req, file, cb) => {
-        const allowed = file.mimetype.startsWith('image/') || file.mimetype === 'application/pdf';
-        if (allowed) cb(null, true);
-        else cb(new Error('Only image or PDF files are allowed'));
+        const isImage = file.mimetype.startsWith('image/');
+        const isPdf = file.mimetype === 'application/pdf' ||
+            file.mimetype === 'application/x-pdf' ||
+            (file.originalname && file.originalname.toLowerCase().endsWith('.pdf'));
+
+        if (isImage || isPdf) {
+            cb(null, true);
+        } else {
+            cb(new Error('Only image or PDF files are allowed (detected: ' + file.mimetype + ')'));
+        }
     }
 });
 
